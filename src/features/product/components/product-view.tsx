@@ -23,7 +23,7 @@ export function ProductView({ data, related }: { data: ProductPageData; related:
   const isNew = product.tag !== undefined && NEW_DROP_TAGS.includes(product.tag);
 
   return (
-    <ProductSelectionProvider product={product}>
+    <ProductSelectionProvider product={product} stock={data.stock}>
       <Breadcrumb
         items={[
           { label: "Home", href: "/" },

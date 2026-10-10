@@ -7,7 +7,11 @@ export type AppErrorCode =
   | "OUT_OF_RANGE"
   | "CART_EMPTY"
   | "CART_FULL"
-  | "ALREADY_REVIEWED";
+  | "ALREADY_REVIEWED"
+  | "OUT_OF_STOCK"
+  | "FORBIDDEN"
+  | "CONFLICT"
+  | "BAD_REQUEST";
 
 export function appError(code: AppErrorCode, message: string): never {
   throw new ConvexError({ code, message });

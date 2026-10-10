@@ -1,5 +1,6 @@
 import { zid } from "convex-helpers/server/zod4";
 import { z } from "zod";
+import { SHOW_STOCK_LEFT_AT } from "../src/shared/inventory";
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { colourFacets, filterCatalog, toProductCard } from "./lib/catalog";
@@ -71,11 +72,24 @@ export const getBySlug = zQuery({
       .unique();
     if (!product || !product.isActive) return null;
 
-    const reviews = await ctx.db
-      .query("reviews")
+    const reviews = (
+      await ctx.db
+        .query("reviews")
+        .withIndex("by_product", (q) => q.eq("productId", product._id))
+        .collect()
+    ).filter((r) => !r.hidden);
+    const rating = summariseReviews(reviews);
+
+    const stockRows = await ctx.db
+      .query("inventory")
       .withIndex("by_product", (q) => q.eq("productId", product._id))
       .collect();
-    const rating = summariseReviews(reviews);
+    // Exact counts are only shown when low, so stock levels stay private.
+    const stock = stockRows.map((r) => ({
+      colourKey: r.colourKey,
+      size: r.size,
+      left: r.onHand > SHOW_STOCK_LEFT_AT ? null : r.onHand,
+    }));
 
     const featuredReview =
       reviews.filter((r) => r.rating === 5).sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
@@ -113,6 +127,7 @@ export const getBySlug = zQuery({
         verifiedBuyer: featuredReview.verifiedBuyer,
       },
       recentBuyers,
+      stock,
       pairedProduct: paired && paired.isActive ? toProductCard(paired) : null,
     };
   },

@@ -6,8 +6,12 @@ import { useCartActions } from "@/features/cart";
 import { MAX_QTY_PER_LINE, type Size } from "@/shared/catalog";
 import type { ProductData as Product } from "./types";
 
+export type StockLevel = { colourKey: string; size: Size; left: number | null };
+
 type Selection = {
   product: Product;
+  /** Units left for a size in the current colour: null means plenty, 0 means sold out. */
+  stockLeft: (size: Size) => number | null;
   colourIndex: number;
   colour: Product["colours"][number];
   size: Size | null;
@@ -28,7 +32,15 @@ type Selection = {
 const SelectionContext = createContext<Selection | null>(null);
 
 /** Colour, size and quantity shared by the gallery, buy box and sticky bar. */
-export function ProductSelectionProvider({ product, children }: { product: Product; children: ReactNode }) {
+export function ProductSelectionProvider({
+  product,
+  stock,
+  children,
+}: {
+  product: Product;
+  stock: StockLevel[];
+  children: ReactNode;
+}) {
   const router = useRouter();
   const { add } = useCartActions();
   const [colourIndex, setColourIndex] = useState(0);
@@ -59,8 +71,14 @@ export function ProductSelectionProvider({ product, children }: { product: Produ
     return ok;
   }
 
+  const stockLeft = (s: Size) => {
+    const row = stock.find((r) => r.colourKey === colour.key && r.size === s);
+    return row ? row.left : 0;
+  };
+
   const value: Selection = {
     product,
+    stockLeft,
     colourIndex,
     colour,
     size,
@@ -71,6 +89,11 @@ export function ProductSelectionProvider({ product, children }: { product: Produ
     setColour: (i) => {
       setColourIndex(i);
       setAdded(false);
+      // Keep the size only if it's still in stock in the new colour.
+      const next = product.colours[i];
+      if (size && next && stock.find((r) => r.colourKey === next.key && r.size === size)?.left === 0) {
+        setSizeState(null);
+      }
     },
     setSize: (s) => {
       setSizeState(s);

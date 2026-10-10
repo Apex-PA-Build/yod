@@ -13,6 +13,7 @@ import { ORDER_STATUS_LABELS } from "@/shared/orders";
 import { formatDate } from "../format";
 import type { OrderStatusView } from "../types";
 import { OrderTimeline } from "./order-timeline";
+import { ShipmentTracking } from "./shipment-tracking";
 
 type Result =
   { kind: "found"; order: OrderStatusView } | { kind: "missing" } | { kind: "error"; message: string };
@@ -83,6 +84,7 @@ export function TrackOrderForm({ defaultOrderNumber = "" }: { defaultOrderNumber
               </span>
             </div>
             <OrderTimeline order={result.order} />
+            {result.order.shipment ? <ShipmentTracking shipment={result.order.shipment} /> : null}
           </section>
         ) : result?.kind === "missing" ? (
           <p role="alert" className="m-0 text-sm font-semibold text-accent">

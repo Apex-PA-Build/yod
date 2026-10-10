@@ -53,9 +53,23 @@ Optional:
 - Have the privacy policy and terms reviewed.
 - Checkout supports **cash on delivery only**. Online payments need a gateway such as Razorpay.
 
+## Stock and the admin app
+
+Stock is tracked per colour and size in the `inventory` table, and every change is logged in `stockMovements` (imports, sales, cancellations, returns, manual adjustments). Checkout refuses sizes that are sold out and takes stock in the same transaction that creates the order; cancelling an order puts it back. The seed gives every variant 25 units of opening stock.
+
+The admin dashboard is a separate app ([`yod-admin`](https://github.com/Apex-PA-Build/yod-admin)) that uses this same Convex backend. Its functions live in `convex/admin/`, and each one checks that the caller is on the admin team.
+
+```bash
+# Let the admin app's domain sign in (use its local URL in development)
+npx convex env set ADMIN_SITE_URL http://localhost:3001
+
+# Make yourself the first owner, then sign up with that email
+npx convex run admin/team:grant '{"email":"you@example.com","role":"owner"}'
+```
+
 ## Managing orders
 
-Orders move through `placed → packed → shipped → delivered` (or `cancelled`). Update one from the Convex dashboard or CLI:
+Orders move through `placed → packed → shipped → delivered` (or `cancelled`). Day to day, use the admin app: adding a shipment and its tracking scans moves the order forward automatically. From the CLI:
 
 ```bash
 npx convex run orders:setStatus '{"orderNumber":"YOD-AB12CD34","status":"shipped"}'

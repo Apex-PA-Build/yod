@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { findCart, ownerKey } from "./lib/cart";
+import { availableUnits, changeStock } from "./lib/inventory";
+import { setOrderStatus } from "./lib/orders";
 import { appError } from "./lib/errors";
 import { authedZQuery, getUser, sessionZMutation, zInternalMutation, zQuery } from "./lib/functions";
 import { placeOrderSchema, orderNumberSchema, trackOrderSchema } from "../src/shared/schemas/checkout";
@@ -23,6 +25,29 @@ async function newOrderNumber(ctx: MutationCtx): Promise<string> {
     if (!clash) return orderNumber;
   }
   throw new Error("Could not allocate an order number");
+}
+
+async function shipmentFor(ctx: QueryCtx, orderId: Doc<"orders">["_id"]) {
+  const shipment = await ctx.db
+    .query("shipments")
+    .withIndex("by_order", (q) => q.eq("orderId", orderId))
+    .order("desc")
+    .first();
+  if (!shipment) return null;
+  const events = await ctx.db
+    .query("shipmentEvents")
+    .withIndex("by_shipment_and_at", (q) => q.eq("shipmentId", shipment._id))
+    .order("desc")
+    .take(20);
+  return {
+    courier: shipment.courier,
+    trackingNumber: shipment.trackingNumber,
+    trackingUrl: shipment.trackingUrl ?? null,
+    status: shipment.status,
+    currentLocation: shipment.currentLocation ?? null,
+    estimatedDelivery: shipment.estimatedDelivery ?? null,
+    events: events.map((e) => ({ status: e.status, location: e.location, note: e.note ?? null, at: e.at })),
+  };
 }
 
 function publicStatus(order: Doc<"orders">) {
@@ -55,6 +80,12 @@ export const place = sessionZMutation({
             "Something in your cart is no longer available. Please review your cart.",
           );
         }
+        if ((await availableUnits(ctx, item)) < item.quantity) {
+          appError(
+            "OUT_OF_STOCK",
+            `${product.name} in ${colour.name}, size ${item.size}, doesn't have enough stock left. Please update your cart.`,
+          );
+        }
         return { item, product, colour };
       }),
     );
@@ -79,6 +110,7 @@ export const place = sessionZMutation({
     });
 
     for (const { item, product, colour } of lines) {
+      await changeStock(ctx, item, -item.quantity, { reason: "sale", orderId, actorEmail: address.email });
       await ctx.db.insert("orderItems", {
         orderId,
         productId: product._id,
@@ -107,6 +139,7 @@ async function orderWithItems(ctx: QueryCtx, order: Doc<"orders">) {
     .collect();
   return {
     ...publicStatus(order),
+    shipment: await shipmentFor(ctx, order._id),
     email: order.email,
     address: order.address,
     paymentMethod: order.paymentMethod,
@@ -175,13 +208,13 @@ export const track = zQuery({
       .withIndex("by_order_number", (q) => q.eq("orderNumber", orderNumber))
       .unique();
     if (!order || order.email !== email) return null;
-    return publicStatus(order);
+    return { ...publicStatus(order), shipment: await shipmentFor(ctx, order._id) };
   },
 });
 
 /**
- * Moves an order to its next status. Internal: run it from the Convex
- * dashboard or an admin tool, e.g. `npx convex run orders:setStatus`.
+ * Moves an order to a new status from the CLI, e.g.
+ * `npx convex run orders:setStatus`. The admin app uses admin/orders instead.
  */
 export const setStatus = zInternalMutation({
   args: {
@@ -194,9 +227,6 @@ export const setStatus = zInternalMutation({
       .withIndex("by_order_number", (q) => q.eq("orderNumber", orderNumber))
       .unique();
     if (!order) appError("NOT_FOUND", `No order ${orderNumber}`);
-    await ctx.db.patch(order._id, {
-      status,
-      statusHistory: [...order.statusHistory, { status, at: Date.now() }],
-    });
+    await setOrderStatus(ctx, order, status);
   },
 });
