@@ -34,6 +34,7 @@ export const list = adminZQuery({
         featuredRank: p.featuredRank,
         image: p.colours[0]?.image ?? null,
         colourCount: p.colours.length,
+        colours: p.colours.map((c) => ({ key: c.key, name: c.name, swatch: c.swatch })),
         onHand: stock.filter((s) => s.productId === p._id).reduce((n, s) => n + s.onHand, 0),
         sold30d: sales.filter((s) => s.productId === p._id).reduce((n, s) => n + s.quantity, 0),
       }));

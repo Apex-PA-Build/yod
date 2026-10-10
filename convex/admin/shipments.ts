@@ -69,7 +69,25 @@ export const update = adminZMutation({
   handler: async (ctx, { shipmentId, ...details }) => {
     const shipment = await ctx.db.get(shipmentId);
     if (!shipment) appError("NOT_FOUND", "Shipment not found.");
-    await ctx.db.patch(shipmentId, { ...details, updatedAt: Date.now() });
+    if (details.trackingNumber !== shipment.trackingNumber) {
+      const sameAwb = await ctx.db
+        .query("shipments")
+        .withIndex("by_tracking_number", (q) => q.eq("trackingNumber", details.trackingNumber))
+        .first();
+      if (sameAwb)
+        appError(
+          "CONFLICT",
+          `Tracking number ${details.trackingNumber} is already used by ${sameAwb.orderNumber}.`,
+        );
+    }
+    // Spelled out so a blank link or ETA clears the old value (undefined removes a field).
+    await ctx.db.patch(shipmentId, {
+      courier: details.courier,
+      trackingNumber: details.trackingNumber,
+      trackingUrl: details.trackingUrl,
+      estimatedDelivery: details.estimatedDelivery,
+      updatedAt: Date.now(),
+    });
   },
 });
 
