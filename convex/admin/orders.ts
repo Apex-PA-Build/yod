@@ -162,7 +162,12 @@ export const get = adminZQuery({
       shipments: shipmentsWithEvents,
       stockMovements: movements.map((m) => ({
         delta: m.delta,
+        balanceAfter: m.balanceAfter,
         reason: m.reason,
+        name: items.find((i) => i.productId === m.productId)?.name ?? "",
+        colourName:
+          items.find((i) => i.productId === m.productId && i.colourKey === m.colourKey)?.colourName ??
+          m.colourKey,
         size: m.size,
         at: m.createdAt,
       })),
