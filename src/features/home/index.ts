@@ -1,0 +1,9 @@
+export { CategoryShowcase } from "./components/category-showcase";
+export { ClosingCta } from "./components/closing-cta";
+export { HomeFaq } from "./components/home-faq";
+export { Hero } from "./components/hero";
+export { HowItWorks } from "./components/how-it-works";
+export { Marquee } from "./components/marquee";
+export { StyleQuiz } from "./components/style-quiz";
+export { TrendingSection } from "./components/trending-section";
+export { WearItBanner } from "./components/wear-it-banner";

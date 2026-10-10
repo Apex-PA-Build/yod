@@ -1,0 +1,23 @@
+import type { MetadataRoute } from "next";
+import { env } from "@/env";
+
+export default function robots(): MetadataRoute.Robots {
+  return {
+    rules: {
+      userAgent: "*",
+      allow: "/",
+      disallow: [
+        "/account",
+        "/cart",
+        "/checkout",
+        "/wishlist",
+        "/api/",
+        "/sign-in",
+        "/sign-up",
+        "/forgot-password",
+        "/reset-password",
+      ],
+    },
+    sitemap: `${env.NEXT_PUBLIC_SITE_URL}/sitemap.xml`,
+  };
+}
