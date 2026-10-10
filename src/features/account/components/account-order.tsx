@@ -4,7 +4,7 @@ import { api } from "@convex/_generated/api";
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDate, OrderDetails, OrderTimeline } from "@/features/orders";
+import { formatDate, OrderDetails, OrderTimeline, ShipmentTracking } from "@/features/orders";
 import { ORDER_STATUS_LABELS } from "@/shared/orders";
 
 export function AccountOrder({ orderNumber }: { orderNumber: string }) {
@@ -29,6 +29,7 @@ export function AccountOrder({ orderNumber }: { orderNumber: string }) {
           Placed {formatDate(order.createdAt)} · {ORDER_STATUS_LABELS[order.status]}
         </p>
         <OrderTimeline order={order} />
+        {order.shipment ? <ShipmentTracking shipment={order.shipment} /> : null}
       </div>
       <OrderDetails order={order} />
     </div>

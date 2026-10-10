@@ -2,6 +2,7 @@ import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { appError } from "./errors";
 import { getUser } from "./functions";
+import { availableUnits } from "./inventory";
 import { MAX_CART_LINES, MAX_QTY_PER_LINE } from "../../src/shared/catalog";
 
 export type CartItem = Doc<"carts">["items"][number];
@@ -53,4 +54,13 @@ export function mergeLine(items: CartItem[], line: Omit<CartItem, "addedAt">): C
   return items.map((i) =>
     sameVariant(i, line) ? { ...i, quantity: Math.min(MAX_QTY_PER_LINE, i.quantity + line.quantity) } : i,
   );
+}
+
+/** Throws if the shopper wants more of a variant than is on hand. */
+export async function assertInStock(ctx: MutationCtx, line: Variant & { quantity: number }) {
+  const available = await availableUnits(ctx, line);
+  if (available === 0) appError("OUT_OF_STOCK", "Sorry, that size is sold out.");
+  if (line.quantity > available) {
+    appError("OUT_OF_STOCK", `Only ${available} left in that size.`);
+  }
 }

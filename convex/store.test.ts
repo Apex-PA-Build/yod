@@ -16,10 +16,11 @@ const address = {
   pincode: "560001",
 };
 
-let t: ReturnType<typeof convexTest>;
+const setup = () => convexTest(schema, modules);
+let t: ReturnType<typeof setup>;
 
 beforeEach(async () => {
-  t = convexTest(schema, modules);
+  t = setup();
   await t.mutation(internal.seed.run, {});
 });
 

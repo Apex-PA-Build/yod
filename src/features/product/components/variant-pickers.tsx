@@ -35,7 +35,8 @@ export function ColourPicker() {
 }
 
 export function SizePicker() {
-  const { product, size, setSize, sizeError } = useProductSelection();
+  const { product, size, setSize, sizeError, stockLeft } = useProductSelection();
+  const left = size ? stockLeft(size) : null;
   return (
     <div id="size-picker" role="group" aria-label="Size" className="flex scroll-mt-24 flex-col gap-3.5">
       <div className="flex items-center justify-between">
@@ -47,21 +48,30 @@ export function SizePicker() {
         </Link>
       </div>
       <div className="grid grid-cols-6 gap-2">
-        {SIZES.map((s) => (
-          <ToggleChip
-            key={s}
-            pressed={size === s}
-            disabled={!product.sizes.includes(s)}
-            onClick={() => setSize(s)}
-            className="h-[52px] px-0"
-          >
-            {s}
-          </ToggleChip>
-        ))}
+        {SIZES.map((s) => {
+          const soldOut = stockLeft(s) === 0;
+          return (
+            <ToggleChip
+              key={s}
+              pressed={size === s}
+              disabled={!product.sizes.includes(s) || soldOut}
+              onClick={() => setSize(s)}
+              aria-label={soldOut ? `${s}, sold out` : s}
+              className={cn("h-[52px] px-0", soldOut && "line-through")}
+            >
+              {s}
+            </ToggleChip>
+          );
+        })}
       </div>
       <p className="m-0 text-[13px] leading-relaxed text-muted">
         Cut oversized on purpose. Take your usual size for a relaxed drape, or size up for extra room.
       </p>
+      {left !== null && left > 0 ? (
+        <p className="m-0 text-sm font-semibold text-accent">
+          Only {left} left in {size}.
+        </p>
+      ) : null}
       {sizeError ? (
         <p role="alert" className="m-0 text-sm font-semibold text-accent">
           Please pick a size first.

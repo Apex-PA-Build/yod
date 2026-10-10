@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
   typedRoutes: true,
   images: {
     formats: ["image/avif", "image/webp"],
+    // Product photos uploaded from the admin app are served by Convex storage.
+    remotePatterns: [{ protocol: "https", hostname: "*.convex.cloud" }],
   },
   turbopack: {
     rules: {

@@ -2,6 +2,7 @@ import type { WithoutSystemFields } from "convex/server";
 import type { Doc } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
 import { buildSearchText } from "./lib/catalog";
+import { changeStock } from "./lib/inventory";
 import { SIZES } from "../src/shared/catalog";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -159,7 +160,7 @@ function products(now: number): SeedProduct[] {
 }
 
 /**
- * Loads the six tees from the design. Safe to run more than once:
+ * Loads the six tees from the design with opening stock. Safe to run more than once:
  * `npx convex run seed:run`
  */
 export const run = internalMutation({
@@ -171,6 +172,19 @@ export const run = internalMutation({
     const ids = new Map<string, Doc<"products">["_id"]>();
     for (const p of products(Date.now())) {
       ids.set(p.slug, await ctx.db.insert("products", { ...p, searchText: buildSearchText(p) }));
+    }
+
+    // Opening stock: 25 of every colour and size, recorded as a stock count.
+    for (const p of products(Date.now())) {
+      const productId = ids.get(p.slug)!;
+      for (const c of p.colours) {
+        for (const size of p.sizes) {
+          await changeStock(ctx, { productId, colourKey: c.key, size }, 25, {
+            reason: "recount",
+            note: "Opening stock",
+          });
+        }
+      }
     }
 
     const essential = ids.get("essential-drop-tee");

@@ -17,7 +17,7 @@ export const summary = zQuery({
       .query("reviews")
       .withIndex("by_product", (q) => q.eq("productId", productId))
       .collect();
-    return summariseReviews(reviews);
+    return summariseReviews(reviews.filter((r) => !r.hidden));
   },
 });
 

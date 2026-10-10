@@ -8,6 +8,8 @@ import authConfig from "./auth.config";
 import { sendEmail } from "./lib/email";
 
 const siteUrl = process.env.SITE_URL!;
+/** The admin app's URL, e.g. https://admin.your-domain.com. Optional. */
+const adminSiteUrl = process.env.ADMIN_SITE_URL;
 
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
@@ -24,7 +26,7 @@ const googleProvider =
 export const createAuth = (ctx: GenericCtx<DataModel>) =>
   betterAuth({
     baseURL: siteUrl,
-    trustedOrigins: [siteUrl],
+    trustedOrigins: adminSiteUrl ? [siteUrl, adminSiteUrl] : [siteUrl],
     database: authComponent.adapter(ctx),
     emailAndPassword: {
       enabled: true,

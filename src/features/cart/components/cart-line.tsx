@@ -38,13 +38,20 @@ export function CartLine({ line }: { line: Line }) {
             <p className="m-0 mt-1 text-[13px] text-muted">
               {line.colour.name} · Size {line.size}
             </p>
+            {line.available < line.quantity ? (
+              <p role="alert" className="m-0 mt-1 text-[13px] font-semibold text-accent">
+                {line.available === 0
+                  ? "Sold out. Remove it to check out."
+                  : `Only ${line.available} left. Lower the quantity.`}
+              </p>
+            ) : null}
           </div>
           <span className="shrink-0 font-semibold">{formatPrice(line.lineTotal)}</span>
         </div>
         <div className="mt-auto flex items-center justify-between gap-3">
           <QuantityStepper
             value={line.quantity}
-            max={MAX_QTY_PER_LINE}
+            max={Math.max(1, Math.min(MAX_QTY_PER_LINE, line.available))}
             onChange={(q) => void setQuantity(variant, q)}
           />
           <button

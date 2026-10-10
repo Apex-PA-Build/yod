@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { literals } from "convex-helpers/validators";
 import { FIT_FEEDBACK, GENDERS, PRODUCT_TAGS, PRODUCT_TYPES, SIZES, VIBES } from "../src/shared/catalog";
+import { ADMIN_ROLES, SHIPMENT_STATUSES, STOCK_REASONS } from "../src/shared/inventory";
 import { ORDER_STATUSES } from "../src/shared/orders";
 
 export const vSize = literals(...SIZES);
@@ -11,6 +12,9 @@ export const vProductTag = literals(...PRODUCT_TAGS);
 export const vVibe = literals(...VIBES);
 export const vFitFeedback = literals(...FIT_FEEDBACK);
 export const vOrderStatus = literals(...ORDER_STATUSES);
+export const vShipmentStatus = literals(...SHIPMENT_STATUSES);
+export const vStockReason = literals(...STOCK_REASONS);
+export const vAdminRole = literals(...ADMIN_ROLES);
 
 export const vColour = v.object({
   key: v.string(),
@@ -111,7 +115,10 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_order_number", ["orderNumber"])
-    .index("by_user", ["userId"]),
+    .index("by_user", ["userId"])
+    .index("by_email", ["email"])
+    .index("by_created_at", ["createdAt"])
+    .index("by_status_and_created_at", ["status", "createdAt"]),
 
   orderItems: defineTable({
     orderId: v.id("orders"),
@@ -129,6 +136,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_order", ["orderId"])
+    .index("by_created_at", ["createdAt"])
     .index("by_product_and_created_at", ["productId", "createdAt"])
     .index("by_user_and_product", ["userId", "productId"]),
 
@@ -146,18 +154,23 @@ export default defineSchema({
     photoIds: v.array(v.id("_storage")),
     hasPhotos: v.boolean(),
     verifiedBuyer: v.boolean(),
+    /** Hidden by an admin; never shown on the store. */
+    hidden: v.optional(v.boolean()),
     createdAt: v.number(),
   })
     .index("by_product", ["productId"])
     .index("by_product_and_rating", ["productId", "rating"])
     .index("by_product_and_has_photos", ["productId", "hasPhotos"])
-    .index("by_user_and_product", ["userId", "productId"]),
+    .index("by_user_and_product", ["userId", "productId"])
+    .index("by_created_at", ["createdAt"]),
 
   newsletterSubscribers: defineTable({
     email: v.string(),
     source: v.string(),
     createdAt: v.number(),
-  }).index("by_email", ["email"]),
+  })
+    .index("by_email", ["email"])
+    .index("by_created_at", ["createdAt"]),
 
   contactMessages: defineTable({
     name: v.string(),
@@ -166,6 +179,106 @@ export default defineSchema({
     orderNumber: v.optional(v.string()),
     message: v.string(),
     userId: v.optional(v.string()),
+    /** Set when an admin marks the message as handled. */
+    resolvedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_created_at", ["createdAt"]),
+
+  /** Units on hand for one colour and size of a product. */
+  inventory: defineTable({
+    productId: v.id("products"),
+    colourKey: v.string(),
+    size: vSize,
+    onHand: v.number(),
+    lowStockThreshold: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_product", ["productId"])
+    .index("by_variant", ["productId", "colourKey", "size"]),
+
+  /** Every change to stock, so the history always adds up to what's on hand. */
+  stockMovements: defineTable({
+    productId: v.id("products"),
+    colourKey: v.string(),
+    size: vSize,
+    delta: v.number(),
+    balanceAfter: v.number(),
+    reason: vStockReason,
+    orderId: v.optional(v.id("orders")),
+    importId: v.optional(v.id("stockImports")),
+    note: v.optional(v.string()),
+    actorEmail: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_created_at", ["createdAt"])
+    .index("by_order", ["orderId"])
+    .index("by_product_and_created_at", ["productId", "createdAt"])
+    .index("by_reason_and_created_at", ["reason", "createdAt"]),
+
+  /** A batch of new stock received from a supplier. */
+  stockImports: defineTable({
+    reference: v.string(),
+    supplier: v.string(),
+    note: v.optional(v.string()),
+    receivedAt: v.number(),
+    lines: v.array(
+      v.object({
+        productId: v.id("products"),
+        productName: v.string(),
+        colourKey: v.string(),
+        colourName: v.string(),
+        size: vSize,
+        quantity: v.number(),
+        /** Cost per unit in paise. */
+        unitCost: v.number(),
+      }),
+    ),
+    totalUnits: v.number(),
+    totalCost: v.number(),
+    createdBy: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_received_at", ["receivedAt"])
+    .index("by_reference", ["reference"]),
+
+  shipments: defineTable({
+    orderId: v.id("orders"),
+    orderNumber: v.string(),
+    courier: v.string(),
+    trackingNumber: v.string(),
+    trackingUrl: v.optional(v.string()),
+    status: vShipmentStatus,
+    /** Where the parcel was last scanned, e.g. "Bengaluru hub". */
+    currentLocation: v.optional(v.string()),
+    destinationCity: v.string(),
+    destinationState: v.string(),
+    estimatedDelivery: v.optional(v.number()),
+    deliveredAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_order", ["orderId"])
+    .index("by_tracking_number", ["trackingNumber"])
+    .index("by_status_and_updated_at", ["status", "updatedAt"])
+    .index("by_updated_at", ["updatedAt"]),
+
+  /** Scan history for a shipment: what happened, where and when. */
+  shipmentEvents: defineTable({
+    shipmentId: v.id("shipments"),
+    status: vShipmentStatus,
+    location: v.string(),
+    note: v.optional(v.string()),
+    at: v.number(),
+    createdBy: v.optional(v.string()),
+  }).index("by_shipment_and_at", ["shipmentId", "at"]),
+
+  /** Who can open the admin dashboard. Matched on the signed-in user's email. */
+  adminUsers: defineTable({
+    email: v.string(),
+    role: vAdminRole,
+    addedBy: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_email", ["email"]),
 });

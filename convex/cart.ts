@@ -1,6 +1,15 @@
 import { zid } from "convex-helpers/server/zod4";
 import { z } from "zod";
-import { assertVariant, findCart, mergeLine, ownerKey, sameVariant, writeItems } from "./lib/cart";
+import {
+  assertInStock,
+  assertVariant,
+  findCart,
+  mergeLine,
+  ownerKey,
+  sameVariant,
+  writeItems,
+} from "./lib/cart";
+import { availableUnits } from "./lib/inventory";
 import { requireUser, sessionZMutation, sessionZQuery } from "./lib/functions";
 import { MAX_CART_LINES, MAX_QTY_PER_LINE } from "../src/shared/catalog";
 import { addToCartSchema, cartVariantSchema } from "../src/shared/schemas/cart";
@@ -20,6 +29,8 @@ export const get = sessionZQuery({
           const product = await ctx.db.get(item.productId);
           const colour = product?.colours.find((c) => c.key === item.colourKey);
           if (!product || !product.isActive || !colour) return null;
+          // Capped so the store never reveals exact stock levels.
+          const available = Math.min(await availableUnits(ctx, item), MAX_QTY_PER_LINE);
           return {
             key: `${item.productId}:${item.colourKey}:${item.size}`,
             productId: item.productId,
@@ -30,6 +41,8 @@ export const get = sessionZQuery({
             quantity: item.quantity,
             unitPrice: product.price,
             lineTotal: product.price * item.quantity,
+            /** Units on hand; the line can't be bought if quantity is higher. */
+            available,
           };
         }),
       )
@@ -49,7 +62,12 @@ export const add = sessionZMutation({
     await assertVariant(ctx, line);
     const key = await ownerKey(ctx, ctx.sessionId);
     const cart = await findCart(ctx, key);
-    await writeItems(ctx, key, cart, mergeLine(cart?.items ?? [], line));
+    const items = mergeLine(cart?.items ?? [], line);
+    await assertInStock(
+      ctx,
+      items.find((i) => sameVariant(i, line))!,
+    );
+    await writeItems(ctx, key, cart, items);
   },
 });
 
@@ -66,6 +84,11 @@ export const addMany = sessionZMutation({
     const key = await ownerKey(ctx, ctx.sessionId);
     const cart = await findCart(ctx, key);
     const items = lines.reduce(mergeLine, cart?.items ?? []);
+    for (const line of lines)
+      await assertInStock(
+        ctx,
+        items.find((i) => sameVariant(i, line))!,
+      );
     await writeItems(ctx, key, cart, items);
   },
 });
@@ -76,6 +99,7 @@ export const setQuantity = sessionZMutation({
     quantity: z.number().int().min(0).max(MAX_QTY_PER_LINE),
   },
   handler: async (ctx, { quantity, ...variant }) => {
+    if (quantity > 0) await assertInStock(ctx, { ...variant, quantity });
     const key = await ownerKey(ctx, ctx.sessionId);
     const cart = await findCart(ctx, key);
     if (!cart) return;
